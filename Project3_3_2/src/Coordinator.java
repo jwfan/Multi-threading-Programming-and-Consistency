@@ -77,7 +77,7 @@ public class Coordinator extends Verticle {
 			case "dataCenterUSE,1":
 				switch (forwardedRegion) {
 				case "dataCenterUSW":
-					return 300;
+					return 200;
 				default:
 					return 0;
 				}
@@ -122,11 +122,10 @@ public class Coordinator extends Verticle {
 				final String key = map.get("key");
 				final String value = map.get("value");
 				final Long longtimestamp = Long.parseLong(map.get("timestamp"));
-				final String timestamp=map.get("timestamp");
+				final String timestamp = map.get("timestamp");
 				final String forwarded = map.get("forward");
 				final String forwardedRegion = map.get("region");
 				String forwardRegion = hashMapKey(key);
-
 				// hash map
 				if (!forwardRegion.substring(0, forwardRegion.indexOf(",")).equals(forwardedRegion)) {
 					try {
@@ -136,12 +135,6 @@ public class Coordinator extends Verticle {
 						e.printStackTrace();
 					}
 				} else {
-					try {
-						Thread.sleep(waitTime(forwardedRegion, forwardedRegion));
-					} catch (InterruptedException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
 					if (!keyMap.containsKey(key)) {
 						keyMap.put(key, new PriorityBlockingQueue<String>(11, new Comparator<String>() {
 							@Override
@@ -151,7 +144,6 @@ public class Coordinator extends Verticle {
 							}
 						}));
 					}
-					keyMap.get(key).add(timestamp);
 					Thread t = new Thread(new Runnable() {
 						public void run() {
 							/*
@@ -159,6 +151,13 @@ public class Coordinator extends Verticle {
 							 * operation is handled in a new thread. Use of
 							 * helper functions is highly recommended
 							 */
+							try {
+								Thread.sleep(waitTime(forwardedRegion, forwardedRegion));
+							} catch (InterruptedException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							}
+							keyMap.get(key).add(timestamp);
 							synchronized (keyMap.get(key)) {
 								while (!timestamp.equals(keyMap.get(key).peek())) {
 									try {
@@ -167,6 +166,12 @@ public class Coordinator extends Verticle {
 										// TODO Auto-generated catch block
 										e.printStackTrace();
 									}
+								}
+								try {
+									KeyValueLib.AHEAD(key, timestamp);
+								} catch (IOException e1) {
+									// TODO Auto-generated catch block
+									e1.printStackTrace();
 								}
 								putMap.put(key, new AtomicBoolean(true));
 								try {
