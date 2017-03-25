@@ -1,6 +1,10 @@
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.LinkedList;
 import java.util.Map;
 
@@ -13,102 +17,222 @@ import org.vertx.java.platform.Verticle;
 
 public class Coordinator extends Verticle {
 
-    // This integer variable tells you what region you are in
-    // 1 for US-E, 2 for US-W, 3 for Singapore
-    private static int region = KeyValueLib.region;
+	// This integer variable tells you what region you are in
+	// 1 for US-E, 2 for US-W, 3 for Singapore
+	private static int region = KeyValueLib.region;
 
-    // Default mode: Strongly consistent
-    // Options: strong, eventual
-    private static String consistencyType = "strong";
+	// Default mode: Strongly consistent
+	// Options: strong, eventual
+	private static String consistencyType = "strong";
 
-    /**
-     * TODO: Set the values of the following variables to the DNS names of your
-     * three dataCenter instances. Be sure to match the regions with their DNS!
-     * Do the same for the 3 Coordinators as well.
-     */
-    private static final String dataCenterUSE = "";
-    private static final String dataCenterUSW = "";
-    private static final String dataCenterSING = "";
+	/**
+	 * TODO: Set the values of the following variables to the DNS names of your
+	 * three dataCenter instances. Be sure to match the regions with their DNS!
+	 * Do the same for the 3 Coordinators as well.
+	 */
+	private static final String dataCenterUSE = "";
+	private static final String dataCenterUSW = "";
+	private static final String dataCenterSING = "";
 
-    private static final String coordinatorUSE = "";
-    private static final String coordinatorUSW = "";
-    private static final String coordinatorSING = "";
+	private static final String coordinatorUSE = "";
+	private static final String coordinatorUSW = "";
+	private static final String coordinatorSING = "";
+	ConcurrentHashMap<String, PriorityBlockingQueue<String>> keyMap = new ConcurrentHashMap<String, PriorityBlockingQueue<String>>();
+	ConcurrentHashMap<String, AtomicBoolean> putMap = new ConcurrentHashMap<String, AtomicBoolean>();
 
-    @Override
-    public void start() {
-        KeyValueLib.dataCenters.put(dataCenterUSE, 1);
-        KeyValueLib.dataCenters.put(dataCenterUSW, 2);
-        KeyValueLib.dataCenters.put(dataCenterSING, 3);
-        KeyValueLib.coordinators.put(coordinatorUSE, 1);
-        KeyValueLib.coordinators.put(coordinatorUSW, 2);
-        KeyValueLib.coordinators.put(coordinatorSING, 3);
-        final RouteMatcher routeMatcher = new RouteMatcher();
-        final HttpServer server = vertx.createHttpServer();
-        server.setAcceptBacklog(32767);
-        server.setUsePooledBuffers(true);
-        server.setReceiveBufferSize(4 * 1024);
+	/*
+	 * This is a hash function to map each key to one Coordinator
+	 */
+	public String hashMapKey(String key) {
+		switch (key) {
+		case "a":
+			return "dataCenterUSE,1";
+		case "b":
+			return "dataCenterUSW,2";
+		case "c":
+			return "coordinatorSING,3";
+		default:
+			return "";
+		}
+	}
 
-        routeMatcher.get("/put", new Handler<HttpServerRequest>() {
-            @Override
-            public void handle(final HttpServerRequest req) {
-                MultiMap map = req.params();
-                final String key = map.get("key");
-                final String value = map.get("value");
-                final Long timestamp = Long.parseLong(map.get("timestamp"));
-                final String forwarded = map.get("forward");
-                final String forwardedRegion = map.get("region");
-                Thread t = new Thread(new Runnable() {
-                    public void run() {
-                    /* TODO: Add code for PUT request handling here
-                     * Each operation is handled in a new thread.
-                     * Use of helper functions is highly recommended */
-                    }
-                });
-                t.start();
-                req.response().end(); // Do not remove this
-            }
-        });
+	/*
+	 * This function is used to switch waiting time when put operation is sent
+	 * by either client or other coordinator to the correct Primary Coordinator.
+	 */
+	public Integer waitTime(String hashMapKey, String forwardedRegion) {
+		if (forwardedRegion.isEmpty()) {
+			switch (hashMapKey) {
+			case "dataCenterUSE,1":
+				return 600;
+			case "dataCenterUSW,2":
+				return 800;
+			case "coordinatorSING,3":
+				return 800;
+			default:
+				return 0;
+			}
+		} else {
+			switch (hashMapKey) {
+			case "dataCenterUSE,1":
+				switch (forwardedRegion) {
+				case "dataCenterUSW":
+					return 300;
+				default:
+					return 0;
+				}
+			case "dataCenterUSW,2":
+				switch (forwardedRegion) {
+				case "dataCenterUSE":
+					return 600;
+				default:
+					return 0;
+				}
+			case "coordinatorSING,3":
+				switch (forwardedRegion) {
+				case "dataCenterUSE":
+					return 200;
+				default:
+					return 0;
+				}
+			default:
+				return 0;
+			}
+		}
+	}
 
-        routeMatcher.get("/get", new Handler<HttpServerRequest>() {
-            @Override
-            public void handle(final HttpServerRequest req) {
-                MultiMap map = req.params();
-                final String key = map.get("key");
-                final Long timestamp = Long.parseLong(map.get("timestamp"));
-                Thread t = new Thread(new Runnable() {
-                    public void run() {
-                    /* TODO: Add code for GET requests handling here
-                     * Each operation is handled in a new thread.
-                     * Use of helper functions is highly recommended */
-                        String response = "0";
-                        req.response().end(response);
-                    }
-                });
-                t.start();
-            }
-        });
-        /* This endpoint is used by the grader to change the consistency level */
-        routeMatcher.get("/consistency", new Handler<HttpServerRequest>() {
-            @Override
-            public void handle(final HttpServerRequest req) {
-                MultiMap map = req.params();
-                consistencyType = map.get("consistency");
-                req.response().end();
-            }
-        });
-        routeMatcher.noMatch(new Handler<HttpServerRequest>() {
-            @Override
-            public void handle(final HttpServerRequest req) {
-                req.response().putHeader("Content-Type", "text/html");
-                String response = "Not found.";
-                req.response().putHeader("Content-Length",
-                        String.valueOf(response.length()));
-                req.response().end(response);
-                req.response().close();
-            }
-        });
-        server.requestHandler(routeMatcher);
-        server.listen(8080);
-    }
+	@Override
+	public void start() {
+		KeyValueLib.dataCenters.put(dataCenterUSE, 1);
+		KeyValueLib.dataCenters.put(dataCenterUSW, 2);
+		KeyValueLib.dataCenters.put(dataCenterSING, 3);
+		KeyValueLib.coordinators.put(coordinatorUSE, 1);
+		KeyValueLib.coordinators.put(coordinatorUSW, 2);
+		KeyValueLib.coordinators.put(coordinatorSING, 3);
+		final RouteMatcher routeMatcher = new RouteMatcher();
+		final HttpServer server = vertx.createHttpServer();
+		server.setAcceptBacklog(32767);
+		server.setUsePooledBuffers(true);
+		server.setReceiveBufferSize(4 * 1024);
+
+		routeMatcher.get("/put", new Handler<HttpServerRequest>() {
+			@Override
+			public void handle(final HttpServerRequest req) {
+				MultiMap map = req.params();
+				final String key = map.get("key");
+				final String value = map.get("value");
+				final Long longtimestamp = Long.parseLong(map.get("timestamp"));
+				final String timestamp=map.get("timestamp");
+				final String forwarded = map.get("forward");
+				final String forwardedRegion = map.get("region");
+				String forwardRegion = hashMapKey(key);
+
+				// hash map
+				if (!forwardRegion.substring(0, forwardRegion.indexOf(",")).equals(forwardedRegion)) {
+					try {
+						KeyValueLib.FORWARD(forwardRegion, key, value, timestamp);
+					} catch (IOException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				} else {
+					try {
+						Thread.sleep(waitTime(forwardedRegion, forwardedRegion));
+					} catch (InterruptedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+					if (!keyMap.containsKey(key)) {
+						keyMap.put(key, new PriorityBlockingQueue<String>(11, new Comparator<String>() {
+							@Override
+							public int compare(String o1, String o2) {
+								// TODO Auto-generated method stub
+								return o1.compareTo(o2);
+							}
+						}));
+					}
+					keyMap.get(key).add(timestamp);
+					Thread t = new Thread(new Runnable() {
+						public void run() {
+							/*
+							 * TODO: Add code for PUT request handling here Each
+							 * operation is handled in a new thread. Use of
+							 * helper functions is highly recommended
+							 */
+							synchronized (keyMap.get(key)) {
+								while (!timestamp.equals(keyMap.get(key).peek())) {
+									try {
+										keyMap.get(key).wait();
+									} catch (InterruptedException e) {
+										// TODO Auto-generated catch block
+										e.printStackTrace();
+									}
+								}
+								putMap.put(key, new AtomicBoolean(true));
+								try {
+									KeyValueLib.PUT(dataCenterUSE, key, value, timestamp, consistencyType);
+									KeyValueLib.PUT(dataCenterUSW, key, value, timestamp, consistencyType);
+									KeyValueLib.PUT(dataCenterSING, key, value, timestamp, consistencyType);
+								} catch (IOException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
+								keyMap.get(key).remove(timestamp);
+								putMap.put(key, new AtomicBoolean(false));
+								keyMap.get(key).notifyAll();
+							}
+
+						}
+					});
+					t.start();
+					req.response().end(); // Do not remove this
+				}
+			}
+		});
+
+		routeMatcher.get("/get", new Handler<HttpServerRequest>() {
+			@Override
+			public void handle(final HttpServerRequest req) {
+				MultiMap map = req.params();
+				final String key = map.get("key");
+				final Long timestamp = Long.parseLong(map.get("timestamp"));
+				Thread t = new Thread(new Runnable() {
+					public void run() {
+						/*
+						 * TODO: Add code for GET requests handling here Each
+						 * operation is handled in a new thread. Use of helper
+						 * functions is highly recommended
+						 */
+						String response = "0";
+						req.response().end(response);
+
+					}
+				});
+				t.start();
+			}
+		});
+		/*
+		 * This endpoint is used by the grader to change the consistency level
+		 */
+		routeMatcher.get("/consistency", new Handler<HttpServerRequest>() {
+			@Override
+			public void handle(final HttpServerRequest req) {
+				MultiMap map = req.params();
+				consistencyType = map.get("consistency");
+				req.response().end();
+			}
+		});
+		routeMatcher.noMatch(new Handler<HttpServerRequest>() {
+			@Override
+			public void handle(final HttpServerRequest req) {
+				req.response().putHeader("Content-Type", "text/html");
+				String response = "Not found.";
+				req.response().putHeader("Content-Length", String.valueOf(response.length()));
+				req.response().end(response);
+				req.response().close();
+			}
+		});
+		server.requestHandler(routeMatcher);
+		server.listen(8080);
+	}
 }
-
