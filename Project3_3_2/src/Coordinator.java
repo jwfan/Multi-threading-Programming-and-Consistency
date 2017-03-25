@@ -30,11 +30,11 @@ public class Coordinator extends Verticle {
 	 * three dataCenter instances. Be sure to match the regions with their DNS!
 	 * Do the same for the 3 Coordinators as well.
 	 */
-	private static final String dataCenterUSE = "";
+	private static final String dataCenterUSE = "ec2-54-242-180-100.compute-1.amazonaws.com";
 	private static final String dataCenterUSW = "";
 	private static final String dataCenterSING = "";
 
-	private static final String coordinatorUSE = "";
+	private static final String coordinatorUSE = "ec2-54-205-250-50.compute-1.amazonaws.com";
 	private static final String coordinatorUSW = "";
 	private static final String coordinatorSING = "";
 	ConcurrentHashMap<String, PriorityBlockingQueue<String>> keyMap = new ConcurrentHashMap<String, PriorityBlockingQueue<String>>();
@@ -178,6 +178,7 @@ public class Coordinator extends Verticle {
 									KeyValueLib.PUT(dataCenterUSE, key, value, timestamp, consistencyType);
 									KeyValueLib.PUT(dataCenterUSW, key, value, timestamp, consistencyType);
 									KeyValueLib.PUT(dataCenterSING, key, value, timestamp, consistencyType);
+									KeyValueLib.COMPLETE(key, timestamp);
 								} catch (IOException e) {
 									// TODO Auto-generated catch block
 									e.printStackTrace();
@@ -200,7 +201,9 @@ public class Coordinator extends Verticle {
 			public void handle(final HttpServerRequest req) {
 				MultiMap map = req.params();
 				final String key = map.get("key");
-				final Long timestamp = Long.parseLong(map.get("timestamp"));
+				final Long longtimestamp = Long.parseLong(map.get("timestamp"));
+				final String timestamp = map.get("timestamp");
+				String forwardRegion = hashMapKey(key);
 				Thread t = new Thread(new Runnable() {
 					public void run() {
 						/*
@@ -209,6 +212,16 @@ public class Coordinator extends Verticle {
 						 * functions is highly recommended
 						 */
 						String response = "0";
+						try {
+							response = KeyValueLib.GET(forwardRegion.substring(0, forwardRegion.indexOf(",")), key,
+									timestamp, "strong");
+							if (response.equals("null")) {
+								response = "0";
+							}
+						} catch (IOException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
 						req.response().end(response);
 
 					}
