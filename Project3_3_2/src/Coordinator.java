@@ -30,13 +30,13 @@ public class Coordinator extends Verticle {
 	 * three dataCenter instances. Be sure to match the regions with their DNS!
 	 * Do the same for the 3 Coordinators as well.
 	 */
-	private static final String dataCenterUSE = "ec2-54-242-180-100.compute-1.amazonaws.com";
-	private static final String dataCenterUSW = "";
-	private static final String dataCenterSING = "";
+	private static final String dataCenterUSE = "ec2-54-205-250-50.compute-1.amazonaws.com";
+	private static final String dataCenterUSW = "ec2-54-157-223-4.compute-1.amazonaws.com";
+	private static final String dataCenterSING = "ec2-34-204-79-205.compute-1.amazonaws.com";
 
-	private static final String coordinatorUSE = "ec2-54-205-250-50.compute-1.amazonaws.com";
-	private static final String coordinatorUSW = "";
-	private static final String coordinatorSING = "";
+	private static final String coordinatorUSE = "ec2-54-242-180-100.compute-1.amazonaws.com";
+	private static final String coordinatorUSW = "ec2-54-145-30-84.compute-1.amazonaws.com";
+	private static final String coordinatorSING = "ec2-107-21-81-226.compute-1.amazonaws.com";
 	ConcurrentHashMap<String, PriorityBlockingQueue<String>> keyMap = new ConcurrentHashMap<String, PriorityBlockingQueue<String>>();
 	ConcurrentHashMap<String, AtomicBoolean> putMap = new ConcurrentHashMap<String, AtomicBoolean>();
 
@@ -129,7 +129,7 @@ public class Coordinator extends Verticle {
 				// hash map
 				if (!forwardRegion.substring(0, forwardRegion.indexOf(",")).equals(forwardedRegion)) {
 					try {
-						KeyValueLib.FORWARD(forwardRegion, key, value, timestamp);
+						KeyValueLib.FORWARD(forwardRegion.substring(0, forwardRegion.indexOf(",")), key, value, timestamp);
 					} catch (IOException e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
@@ -152,7 +152,7 @@ public class Coordinator extends Verticle {
 							 * helper functions is highly recommended
 							 */
 							try {
-								Thread.sleep(waitTime(forwardedRegion, forwardedRegion));
+								Thread.sleep(waitTime(forwardRegion, forwardedRegion));
 							} catch (InterruptedException e) {
 								// TODO Auto-generated catch block
 								e.printStackTrace();
