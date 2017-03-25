@@ -37,6 +37,7 @@ public class Coordinator extends Verticle {
 	private static final String coordinatorUSE = "ec2-54-242-180-100.compute-1.amazonaws.com";
 	private static final String coordinatorUSW = "ec2-54-145-30-84.compute-1.amazonaws.com";
 	private static final String coordinatorSING = "ec2-107-21-81-226.compute-1.amazonaws.com";
+	private static final String currentCoordinator="ec2-54-242-180-100.compute-1.amazonaws.com";
 	ConcurrentHashMap<String, PriorityBlockingQueue<String>> keyMap = new ConcurrentHashMap<String, PriorityBlockingQueue<String>>();
 	ConcurrentHashMap<String, AtomicBoolean> putMap = new ConcurrentHashMap<String, AtomicBoolean>();
 
@@ -46,11 +47,11 @@ public class Coordinator extends Verticle {
 	public String hashMapKey(String key) {
 		switch (key) {
 		case "a":
-			return "dataCenterUSE,1";
+			return "ec2-54-242-180-100.compute-1.amazonaws.com,1";
 		case "b":
-			return "dataCenterUSW,2";
+			return "ec2-54-145-30-84.compute-1.amazonaws.com,2";
 		case "c":
-			return "coordinatorSING,3";
+			return "ec2-107-21-81-226.compute-1.amazonaws.com,3";
 		default:
 			return "";
 		}
@@ -127,7 +128,7 @@ public class Coordinator extends Verticle {
 				final String forwardedRegion = map.get("region");
 				String forwardRegion = hashMapKey(key);
 				// hash map
-				if (!forwardRegion.substring(0, forwardRegion.indexOf(",")).equals(forwardedRegion)) {
+				if (!forwardRegion.substring(0, forwardRegion.indexOf(",")).equals(currentCoordinator)) {
 					try {
 						KeyValueLib.FORWARD(forwardRegion.substring(0, forwardRegion.indexOf(",")), key, value, timestamp);
 					} catch (IOException e) {
